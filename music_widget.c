@@ -164,9 +164,9 @@ Drw doXorgShit(int n_lines){
 
 int k = 0;
 
-unsigned int draw_text(Drw* drw, unsigned int width, const int x, const int y, const char* text){
+unsigned int draw_text(Drw* drw, const int x, const int y, const char* text){
 	/*
-		x,y specified in pixels, same as width
+		x,y specified in pixels
 	*/
 	XftDraw *d = XftDrawCreate(drw->dpy, drw->drawable, drw->visual, drw->cmap);
 
@@ -176,8 +176,6 @@ unsigned int draw_text(Drw* drw, unsigned int width, const int x, const int y, c
 	XftTextExtentsUtf8(drw->dpy, drw->font->xfont, (XftChar8 *)text, strlen(text), &ext);
 	l = ext.xOff;
 	XftDrawRect (d, drw->colormap->back, 0,0, l, drw->font->h);
-	XMoveResizeWindow(drw->dpy, drw->window, SCR_WIDTH - w_x - l, w_y, l+1, drw->h);
-
 	//draw
 	XftDrawStringUtf8(d, drw->colormap->front, drw->font->xfont, 0, drw->font->xfont->ascent, text, strlen(text));
 	//apply changes
@@ -194,7 +192,8 @@ int main(int argc, char ** argv)
 	while(1){
 		song_name();
 
-		draw_text(&drw, 0, 0, 0, message);
+		unsigned l = draw_text(&drw, 0, 0, message);
+		XMoveResizeWindow(drw.dpy, drw.window, SCR_WIDTH - w_x - l, w_y, l+1, drw.h);
 		XFlush(drw.dpy); //!!!important
 
 		usleep(1000000); //TODO: optimise for exact frame rate
