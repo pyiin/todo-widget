@@ -21,7 +21,7 @@ char* message;
 const unsigned int w_width = SCR_WIDTH;
 const unsigned int w_height = 62;
 const unsigned int w_x = 5;
-unsigned int w_y = SCR_HEIGHT - 50;
+unsigned int w_y = SCR_HEIGHT - 30;
 const unsigned long int background = 0x00000000;
 
 typedef struct _Fnt {
@@ -117,9 +117,9 @@ Drw doXorgShit(int n_lines){
 
 	drw.screen = DefaultScreen(drw.dpy);
 	drw.root = DefaultRootWindow(drw.dpy);
-	drw.font = xfont_create(&drw, "Open Sans Semi Bold:pixelsize=20");
+	drw.font = xfont_create(&drw, "Baloo 2 semibold:pixelsize=20");//Open Sans Semi Bold
 	drw.h = drw.font->h;
-	w_y = SCR_HEIGHT - drw.h;
+	w_y = SCR_HEIGHT - drw.font->xfont->ascent - 7;
 
 	//set window attributes and create window
 	XVisualInfo vinfo;
@@ -188,8 +188,6 @@ unsigned int draw_text(Drw* drw, unsigned int width, const int x, const int y, c
 
 int main(int argc, char ** argv)
 {
-	message = malloc(1000);
-	memset(message, 0, 1000);
 	Drw drw = doXorgShit(argc);
 
 	//loop
@@ -218,12 +216,16 @@ void song_name(){
 
 	if(now_playing){
 		const char* name = mpd_song_get_tag(now_playing, MPD_TAG_TITLE, 0);
+		const char* artist = mpd_song_get_tag(now_playing, MPD_TAG_ARTIST, 0);
 		if(name){
-			memset(message, 0, 1000);
-			strcpy(message, name);
-			for(char* i = message; *i != 0; i++){
-				*i = (*i >= 'a' && *i <= 'z') ? *i-32 : *i;
-			}
+			free(message);
+			message = malloc(strlen(name)+strlen(artist)+4);
+			strcpy(message, artist);
+			strcat(message, " - ");
+			strcat(message, name);
+			//for(char* i = message; *i != 0; i++){
+			//	*i = (*i >= 'a' && *i <= 'z') ? *i-32 : *i;
+			//}
 		}
 	}
 
