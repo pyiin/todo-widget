@@ -28,8 +28,6 @@ typedef struct _Fnt {
 	Display *dpy;
 	unsigned int h;
 	XftFont *xfont;
-	FcPattern *pattern;
-	struct Fnt *next;
 } Fnt;
 
 typedef struct _Cmap{
@@ -61,7 +59,6 @@ Fnt* xfont_create(Drw *drw, const char *fontname)
 {
 	Fnt *font;
 	XftFont *xfont = NULL;
-	FcPattern *pattern = NULL;
 
 	if (fontname) {
 		/* Using the pattern found at font->xfont->pattern does not yield the
@@ -73,17 +70,11 @@ Fnt* xfont_create(Drw *drw, const char *fontname)
 			fprintf(stderr, "error, cannot load font from name: '%s'\n", fontname);
 			return NULL;
 		}
-		if (!(pattern = FcNameParse((FcChar8 *) fontname))) {
-			fprintf(stderr, "error, cannot parse font name to pattern: '%s'\n", fontname);
-			XftFontClose(drw->dpy, xfont);
-			return NULL;
-		}
 	}else
 		fprintf(stderr,"no font specified.");
 
 	font = calloc(1, sizeof(Fnt));
 	font->xfont = xfont;
-	font->pattern = pattern;
 	font->h = xfont->ascent + xfont->descent;
 	font->dpy = drw->dpy;
 
@@ -168,6 +159,7 @@ unsigned int draw_text(Drw* drw, const int x, const int y, const char* text){
 	/*
 		x,y specified in pixels
 	*/
+
 	XftDraw *d = XftDrawCreate(drw->dpy, drw->drawable, drw->visual, drw->cmap);
 
 	//get string length
@@ -176,6 +168,7 @@ unsigned int draw_text(Drw* drw, const int x, const int y, const char* text){
 	XftTextExtentsUtf8(drw->dpy, drw->font->xfont, (XftChar8 *)text, strlen(text), &ext);
 	l = ext.xOff;
 	XftDrawRect (d, drw->colormap->back, 0,0, l, drw->font->h);
+
 	//draw
 	XftDrawStringUtf8(d, drw->colormap->front, drw->font->xfont, 0, drw->font->xfont->ascent, text, strlen(text));
 	//apply changes
@@ -187,21 +180,17 @@ unsigned int draw_text(Drw* drw, const int x, const int y, const char* text){
 int main(int argc, char ** argv)
 {
 	Drw drw = doXorgShit(argc);
+	message = malloc(1);
 
 	//loop
 	while(1){
 		song_name();
-
 		unsigned l = draw_text(&drw, 0, 0, message);
 		XMoveResizeWindow(drw.dpy, drw.window, SCR_WIDTH - w_x - l, w_y, l+1, drw.h);
 		XFlush(drw.dpy); //!!!important
 
-		usleep(1000000); //TODO: optimise for exact frame rate
-		//while(QLength(drw.dpy)>0){ //fucking finally works
-		//	XNextEvent(drw.dpy, &event);
-		//}
+		usleep(100000); //TODO: wait for song to change
 	}
-
 	// close connection to the server
 	XCloseDisplay(drw.dpy);
 
@@ -210,22 +199,33 @@ int main(int argc, char ** argv)
 void song_name(){
 	/* get song name */
 	struct mpd_connection* conn = mpd_connection_new("localhost", 0, 0);
+	struct mpd_status* status = mpd_run_status(conn);
 	mpd_send_current_song(conn);
 	struct mpd_song* now_playing = mpd_recv_song(conn);
 
-	if(now_playing){
+	// ----- get pause
+	enum mpd_state state = mpd_status_get_state(status);
+	mpd_status_free(status);
+	// -----
+
+	if(now_playing && state == MPD_STATE_PLAY){
 		const char* name = mpd_song_get_tag(now_playing, MPD_TAG_TITLE, 0);
 		const char* artist = mpd_song_get_tag(now_playing, MPD_TAG_ARTIST, 0);
 		if(name){
+			//should probably change to use realloc
 			free(message);
 			message = malloc(strlen(name)+strlen(artist)+4);
 			strcpy(message, artist);
 			strcat(message, " - ");
 			strcat(message, name);
-			//for(char* i = message; *i != 0; i++){
-			//	*i = (*i >= 'a' && *i <= 'z') ? *i-32 : *i;
-			//}
 		}
+	}
+	else{
+#ifdef __DEBUG
+		printf("NO %d\n", state);
+#endif
+		message = malloc(1);
+		*message = 0;
 	}
 
 	// cleanup
