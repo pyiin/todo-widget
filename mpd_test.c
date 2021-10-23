@@ -13,6 +13,7 @@ int main(){
 
 	char* name = mpd_song_get_tag(now_playing, MPD_TAG_TITLE, 0);
 	printf("%s\n", name);
+	printf("%d\n", mpd_status_get_kbit_rate(stat));
 	unsigned a = mpd_song_get_duration(now_playing);
 
 	/* current song status */

@@ -1,7 +1,7 @@
 SRC = music_widget.c
 CC = cc
 INC = /usr/include/freetype2
-LDFLAGS = -lX11 -lX11-xcb -lxcb -lxcb-res -lXrender -lfontconfig -lXft
+LDFLAGS = -lX11 -lX11-xcb -lxcb -lxcb-res -lXrender -lfontconfig -lXft -lXinerama
 MPDFLAGS = -lmpdclient
 
 music_widget: music_widget.c

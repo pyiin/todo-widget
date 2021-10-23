@@ -1,6 +1,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xft/Xft.h>
+#include <X11/extensions/Xinerama.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -8,9 +9,6 @@
 #include <mpd/client.h>
 
 //monitor dimensions
-#define SCR_WIDTH 1920
-#define SCR_HEIGHT 1080
-
 #define MIN(x,y) ((x<y)?x:y)
 #define MAX(x,y) ((x>y)?x:y)
 
@@ -18,10 +16,11 @@ void song_name();
 
 char* message;
 
-const unsigned int w_width = SCR_WIDTH;
-const unsigned int w_height = 62;
-const unsigned int w_x = 5;
-unsigned int w_y = SCR_HEIGHT - 30;
+XineramaScreenInfo screen;
+unsigned int w_width = 1920;
+unsigned int w_height = 62;
+unsigned int w_x = 5;
+unsigned int w_y = 1080 - 30;
 const unsigned long int background = 0x00000000;
 
 typedef struct _Fnt {
@@ -92,7 +91,7 @@ XftColor* create_colour(unsigned int col){
 //}}}
 
 //+/-
-Drw doXorgShit(int n_lines){
+Drw doXorgShit(int screen_num){
 	// open connection to the server
 	Drw drw = {
 		.dpy = XOpenDisplay(NULL),
@@ -110,7 +109,21 @@ Drw doXorgShit(int n_lines){
 	drw.root = DefaultRootWindow(drw.dpy);
 	drw.font = xfont_create(&drw, "Baloo 2 semibold:pixelsize=20");//Open Sans Semi Bold
 	drw.h = drw.font->h;
-	w_y = SCR_HEIGHT - drw.font->xfont->ascent - 7;
+
+	//xinerama {{{
+	int n_screens;
+	XineramaScreenInfo* xsinfo = XineramaQueryScreens(drw.dpy, &n_screens);
+	for(int i=0; i<n_screens; i++){
+		fprintf(stderr, "[%d] = %dx%d+%d+%d\n",i, xsinfo[i].width, xsinfo[i].height, xsinfo[i].x_org, xsinfo[i].y_org);
+	}
+	fprintf(stderr, "using screen number %d\n", screen_num < n_screens ? screen_num : 0);
+	screen = xsinfo[screen_num < n_screens ? screen_num : 0];
+	XFree(xsinfo);
+	//}}}
+
+	w_y = screen.height+screen.y_org - drw.font->xfont->ascent - 7;
+	w_x = screen.width+screen.x_org;
+
 
 	//set window attributes and create window
 	XVisualInfo vinfo;
@@ -150,6 +163,7 @@ Drw doXorgShit(int n_lines){
 	};
 	drw.colormap = &colormap;
 
+
 	return drw;
 }
 
@@ -179,14 +193,19 @@ unsigned int draw_text(Drw* drw, const int x, const int y, const char* text){
 
 int main(int argc, char ** argv)
 {
-	Drw drw = doXorgShit(argc);
+	int scr_num = 0;
+	if(argc > 1) scr_num = atoi(argv[1]);
+	Drw drw = doXorgShit(scr_num);
 	message = malloc(1);
 
 	//loop
 	while(1){
 		song_name();
 		unsigned l = draw_text(&drw, 0, 0, message);
-		XMoveResizeWindow(drw.dpy, drw.window, SCR_WIDTH - w_x - l, w_y, l+1, drw.h);
+#ifdef __DEBUG
+		fprintf(stderr, "%dx%d+%d+%d\n", screen.width + screen.x_org - l, w_y, l+1, drw.h);
+#endif
+		XMoveResizeWindow(drw.dpy, drw.window, screen.width + screen.x_org - l - 1, w_y, l+1, drw.h);
 		XFlush(drw.dpy); //!!!important
 
 		usleep(100000); //TODO: wait for song to change
@@ -196,10 +215,11 @@ int main(int argc, char ** argv)
 
 	return 0;
  }
+
 void song_name(){
 	/* get song name */
 	struct mpd_connection* conn = mpd_connection_new("localhost", 0, 0);
-	struct mpd_status* status = mpd_run_status(conn);
+	struct mpd_status* status = mpd_run_status(conn); // has to be second, i don't know why
 	mpd_send_current_song(conn);
 	struct mpd_song* now_playing = mpd_recv_song(conn);
 
