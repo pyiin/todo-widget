@@ -7,6 +7,9 @@ MPDFLAGS = -lmpdclient
 music_widget: music_widget.c
 	${CC} -o $@ ${SRC} -I${INC} ${LDFLAGS} ${MPDFLAGS}
 
+music_widget_dbg: music_widget.c
+	${CC} -o $@ ${SRC} -I${INC} ${LDFLAGS} ${MPDFLAGS} -D__DEBUG
+
 run: music_widget
 	./music_widget
 

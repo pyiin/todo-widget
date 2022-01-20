@@ -90,7 +90,23 @@ XftColor* create_colour(unsigned int col){
 }
 //}}}
 
-//+/-
+//xinerama {{{
+void run_Xinerama(int screen_num, Drw* drw){
+	int n_screens;
+	XineramaScreenInfo* xsinfo = XineramaQueryScreens(drw->dpy, &n_screens);
+#ifdef __DEBUG
+	for(int i=0; i<n_screens; i++){
+		fprintf(stderr, "[%d] = %dx%d+%d+%d\n",i, xsinfo[i].width, xsinfo[i].height, xsinfo[i].x_org, xsinfo[i].y_org);
+	}
+	fprintf(stderr, "using screen number %d\n", screen_num < n_screens ? screen_num : 0);
+#endif
+	screen = xsinfo[screen_num < n_screens ? screen_num : 0];
+	XFree(xsinfo);
+	w_y = screen.height+screen.y_org - drw->font->xfont->ascent - 7;
+	w_x = screen.width+screen.x_org;
+}
+//}}}
+
 Drw doXorgShit(int screen_num){
 	// open connection to the server
 	Drw drw = {
@@ -110,21 +126,6 @@ Drw doXorgShit(int screen_num){
 	drw.font = xfont_create(&drw, "Baloo 2 semibold:pixelsize=20");//Open Sans Semi Bold
 	drw.h = drw.font->h;
 
-	//xinerama {{{
-	int n_screens;
-	XineramaScreenInfo* xsinfo = XineramaQueryScreens(drw.dpy, &n_screens);
-	for(int i=0; i<n_screens; i++){
-		fprintf(stderr, "[%d] = %dx%d+%d+%d\n",i, xsinfo[i].width, xsinfo[i].height, xsinfo[i].x_org, xsinfo[i].y_org);
-	}
-	fprintf(stderr, "using screen number %d\n", screen_num < n_screens ? screen_num : 0);
-	screen = xsinfo[screen_num < n_screens ? screen_num : 0];
-	XFree(xsinfo);
-	//}}}
-
-	w_y = screen.height+screen.y_org - drw.font->xfont->ascent - 7;
-	w_x = screen.width+screen.x_org;
-
-
 	//set window attributes and create window
 	XVisualInfo vinfo;
 	XMatchVisualInfo(drw.dpy, drw.screen, drw.depth, TrueColor, &vinfo);
@@ -140,6 +141,7 @@ Drw doXorgShit(int screen_num){
 					drw.visual, CWColormap | CWBorderPixel | CWBackPixel | CWOverrideRedirect, &attr);
 	drw.drawable = XCreatePixmap(drw.dpy, drw.root, drw.w, drw.h, drw.depth);
 
+	run_Xinerama(screen_num, &drw);
 	//apply class name
 	XClassHint class_hint ={
 		.res_name = "music_widget",
@@ -162,7 +164,6 @@ Drw doXorgShit(int screen_num){
 		create_colour(0x00000000),
 	};
 	drw.colormap = &colormap;
-
 
 	return drw;
 }
@@ -199,7 +200,9 @@ int main(int argc, char ** argv)
 	message = malloc(1);
 
 	//loop
+	int count = 0;
 	while(1){
+		count++;
 		song_name();
 		unsigned l = draw_text(&drw, 0, 0, message);
 #ifdef __DEBUG
@@ -208,6 +211,8 @@ int main(int argc, char ** argv)
 		XMoveResizeWindow(drw.dpy, drw.window, screen.width + screen.x_org - l - 1, w_y, l+1, drw.h);
 		XFlush(drw.dpy); //!!!important
 
+		if((count & 0x1f) == 0)
+			run_Xinerama(scr_num, &drw);
 		usleep(100000); //TODO: wait for song to change
 	}
 	// close connection to the server
