@@ -6,7 +6,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <mpd/client.h>
+#include <fcntl.h>
+
+#define MAX_LEN 10000
 
 //monitor dimensions
 #define MIN(x,y) ((x<y)?x:y)
@@ -15,12 +17,13 @@
 void song_name();
 
 char* message;
+char* list[MAX_LEN];
 
 XineramaScreenInfo screen;
 unsigned int w_width = 1920;
-unsigned int w_height = 62;
-unsigned int w_x = 5;
-unsigned int w_y = 1080 - 30;
+unsigned int w_height = 1080;
+unsigned int w_x = 30;
+unsigned int w_y = 60;
 const unsigned long int background = 0x00000000;
 
 typedef struct _Fnt {
@@ -32,6 +35,9 @@ typedef struct _Fnt {
 typedef struct _Cmap{
 	XftColor* front;
 	XftColor* back;
+	XftColor* warn;
+	XftColor* urgn;
+	XftColor* good;
 } Cmap;
 
 typedef struct _Drw{
@@ -102,8 +108,8 @@ void run_Xinerama(int screen_num, Drw* drw){
 #endif
 	screen = xsinfo[screen_num < n_screens ? screen_num : 0];
 	XFree(xsinfo);
-	w_y = screen.height+screen.y_org - drw->font->xfont->ascent - 7;
-	w_x = screen.width+screen.x_org;
+	//w_y = screen.height+screen.y_org - drw->font->xfont->ascent - 7;
+	//w_x = screen.width+screen.x_org;
 }
 //}}}
 
@@ -123,7 +129,7 @@ Drw doXorgShit(int screen_num){
 
 	drw.screen = DefaultScreen(drw.dpy);
 	drw.root = DefaultRootWindow(drw.dpy);
-	drw.font = xfont_create(&drw, "Baloo 2 semibold:pixelsize=20");//Open Sans Semi Bold
+	drw.font = xfont_create(&drw, "Ubuntu Mono Nerd Font:pixelsize=35");//Open Sans Semi Bold
 	drw.h = drw.font->h;
 
 	//set window attributes and create window
@@ -144,8 +150,8 @@ Drw doXorgShit(int screen_num){
 	run_Xinerama(screen_num, &drw);
 	//apply class name
 	XClassHint class_hint ={
-		.res_name = "music_widget",
-		.res_class = "music_widget",
+		.res_name = "todo_widget",
+		.res_class = "todo_widget",
 	};
 	XSetClassHint(drw.dpy, drw.window, &class_hint);
 
@@ -160,17 +166,22 @@ Drw doXorgShit(int screen_num){
 	XMoveResizeWindow(drw.dpy, drw.window, w_x, w_y, drw.w, drw.h);
 
 	colormap = (Cmap){
-		create_colour(0xffaaaaaa),
-		create_colour(0x00000000),
+		create_colour(0xffbbbbaa), //front
+		create_colour(0x00000000), //back
+		create_colour(0xfffabd2f), //warn
+		create_colour(0xfffb491d), //urgn
+		create_colour(0xffb8bb24), //good
 	};
 	drw.colormap = &colormap;
+
+	XLowerWindow(drw.dpy, drw.window);
 
 	return drw;
 }
 
 int k = 0;
 
-unsigned int draw_text(Drw* drw, const int x, const int y, const char* text){
+unsigned int draw_text(Drw* drw, const int x, const int y, const char** text, int N){
 	/*
 		x,y specified in pixels
 	*/
@@ -178,83 +189,85 @@ unsigned int draw_text(Drw* drw, const int x, const int y, const char* text){
 	XftDraw *d = XftDrawCreate(drw->dpy, drw->drawable, drw->visual, drw->cmap);
 
 	//get string length
-	unsigned l;
+	unsigned l = 0;
 	XGlyphInfo ext;
-	XftTextExtentsUtf8(drw->dpy, drw->font->xfont, (XftChar8 *)text, strlen(text), &ext);
-	l = ext.xOff;
-	XftDrawRect (d, drw->colormap->back, 0,0, l, drw->font->h);
+	int i=0;
+	int f_h = drw->font->h;
+	while(i<N){
+		XftTextExtentsUtf8(drw->dpy, drw->font->xfont, (XftChar8 *)text[i], strlen(text[i]), &ext);
+		l = MAX(l, ext.xOff);
+		XftDrawRect (d, drw->colormap->back, 0, 0, l, f_h);
 
 	//draw
-	XftDrawStringUtf8(d, drw->colormap->front, drw->font->xfont, 0, drw->font->xfont->ascent, text, strlen(text));
-	//apply changes
-	XCopyArea(drw->dpy, drw->drawable, drw->window, drw->gc,0, 0, l, drw->font->h, x, y);
+		switch(text[i][0]){
+			case '!':
+				XftDrawStringUtf8(d, drw->colormap->urgn, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i]+1, strlen(text[i]) - 2);
+				break;
+			case '?':
+				XftDrawStringUtf8(d, drw->colormap->warn, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i]+1, strlen(text[i]) - 2);
+				break;
+			case '.':
+				XftDrawStringUtf8(d, drw->colormap->good, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i]+1, strlen(text[i]) - 2);
+				break;
+			default:
+				XftDrawStringUtf8(d, drw->colormap->front, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i], strlen(text[i]) - 1);
+		}
+		//apply changes
+		XCopyArea(drw->dpy, drw->drawable, drw->window, drw->gc,0, 0, l, drw->font->h, x, y+i*f_h);
+		i++;
+	}
+	drw->h = (i <=0 ? 1 : i)*f_h;
 	return l;
+}
+
+int update_list(char* f_name){
+	FILE* f = fopen(f_name, "r");
+	if(f == NULL){
+		list[0] = malloc(MAX_LEN);
+		strcpy(list[0], "File `");
+		strcat(list[0], f_name);
+		strcat(list[0], "` does not exist ");
+		return 1;
+	}
+	int fail = 0;
+	size_t L = 1;
+	int N=0;
+	for(int i=0;i<MAX_LEN && fail != -1 && L > 0; i++){
+		fail = getline(&list[i], &L, f);
+		N =i;
+	}
+	fclose(f);
+	return N;
 }
 
 
 int main(int argc, char ** argv)
 {
+	char* filename = malloc(MAX_LEN);
 	int scr_num = 0;
-	if(argc > 1) scr_num = atoi(argv[1]);
+	if(argc > 2) scr_num = atoi(argv[2]);
+	if(argc > 1) strcpy(filename, argv[1]);
+	else return 1;
 	Drw drw = doXorgShit(scr_num);
-	message = malloc(1);
-
 	//loop
 	int count = 0;
 	while(1){
 		count++;
-		song_name();
-		unsigned l = draw_text(&drw, 0, 0, message);
+		// update text;
+		int c = update_list(filename);
+		unsigned l = draw_text(&drw, 0, 0, list, c);
 #ifdef __DEBUG
 		fprintf(stderr, "%dx%d+%d+%d\n", screen.width + screen.x_org - l, w_y, l+1, drw.h);
 #endif
-		XMoveResizeWindow(drw.dpy, drw.window, screen.width + screen.x_org - l - 1, w_y, l+1, drw.h);
+		XMoveResizeWindow(drw.dpy, drw.window, w_x , w_y, l+1, drw.h);
 		XFlush(drw.dpy); //!!!important
 
 		if((count & 0x1f) == 0)
 			run_Xinerama(scr_num, &drw);
-		usleep(100000); //TODO: wait for song to change
+		usleep(1000000);
 	}
 	// close connection to the server
 	XCloseDisplay(drw.dpy);
 
 	return 0;
  }
-
-void song_name(){
-	/* get song name */
-	struct mpd_connection* conn = mpd_connection_new("localhost", 0, 0);
-	struct mpd_status* status = mpd_run_status(conn); // has to be second, i don't know why
-	mpd_send_current_song(conn);
-	struct mpd_song* now_playing = mpd_recv_song(conn);
-
-	// ----- get pause
-	enum mpd_state state = mpd_status_get_state(status);
-	mpd_status_free(status);
-	// -----
-
-	if(now_playing && state == MPD_STATE_PLAY){
-		const char* name = mpd_song_get_tag(now_playing, MPD_TAG_TITLE, 0);
-		const char* artist = mpd_song_get_tag(now_playing, MPD_TAG_ARTIST, 0);
-		if(name){
-			//should probably change to use realloc
-			free(message);
-			message = malloc(strlen(name)+strlen(artist)+4);
-			strcpy(message, artist);
-			strcat(message, " - ");
-			strcat(message, name);
-		}
-	}
-	else{
-#ifdef __DEBUG
-		printf("NO %d\n", state);
-#endif
-		message = malloc(1);
-		*message = 0;
-	}
-
-	// cleanup
-	mpd_connection_free(conn);
-	if(now_playing)
-		mpd_song_free(now_playing);
-}

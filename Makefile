@@ -1,20 +1,20 @@
-SRC = music_widget.c
+SRC = todo_desktop.c
 CC = cc
 INC = /usr/include/freetype2
 LDFLAGS = -lX11 -lX11-xcb -lxcb -lxcb-res -lXrender -lfontconfig -lXft -lXinerama
-MPDFLAGS = -lmpdclient
+DFLAGS = -fsanitize=address
 
-music_widget: music_widget.c
-	${CC} -o $@ ${SRC} -I${INC} ${LDFLAGS} ${MPDFLAGS}
+todo_desktop: todo_desktop.c
+	${CC} -o $@ ${SRC} -I${INC} ${LDFLAGS}
 
-music_widget_dbg: music_widget.c
-	${CC} -o $@ ${SRC} -I${INC} ${LDFLAGS} ${MPDFLAGS} -D__DEBUG
+todo_desktop_dbg: todo_desktop.c
+	${CC} -o $@ ${SRC} -I${INC} ${LDFLAGS} ${DFLAGS} -D__DEBUG
 
-run: music_widget
-	./music_widget
+run: todo_desktop
+	./todo_desktop
 
-install: music_widget
-	mv -f music_widget ~/.local/bin/
+install: todo_desktop
+	mv -f todo_desktop ~/.local/bin/
 
 mpd_test: mpd_test.c
 	${CC} -o $@ mpd_test.c ${MPDFLAGS}
