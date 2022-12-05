@@ -7,6 +7,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <time.h>
+#include <locale.h>
 
 #define MAX_LEN 10000
 
@@ -38,6 +40,7 @@ typedef struct _Cmap{
 	XftColor* warn;
 	XftColor* urgn;
 	XftColor* good;
+	XftColor* unimp;
 } Cmap;
 
 typedef struct _Drw{
@@ -166,11 +169,12 @@ Drw doXorgShit(int screen_num){
 	XMoveResizeWindow(drw.dpy, drw.window, w_x, w_y, drw.w, drw.h);
 
 	colormap = (Cmap){
-		create_colour(0xffbbbbaa), //front
+		create_colour(0xfffbf1c7), //front
 		create_colour(0x00000000), //back
 		create_colour(0xfffabd2f), //warn
 		create_colour(0xfffb491d), //urgn
 		create_colour(0xffb8bb24), //good
+		create_colour(0xff928374), //unimportant
 	};
 	drw.colormap = &colormap;
 
@@ -199,19 +203,20 @@ unsigned int draw_text(Drw* drw, const int x, const int y, const char** text, in
 		XftDrawRect (d, drw->colormap->back, 0, 0, l, f_h);
 
 	//draw
+		XftColor* front_cmap;
 		switch(text[i][0]){
 			case '!':
-				XftDrawStringUtf8(d, drw->colormap->urgn, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i]+1, strlen(text[i]) - 2);
-				break;
+				front_cmap = drw->colormap->urgn;  break;
 			case '?':
-				XftDrawStringUtf8(d, drw->colormap->warn, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i]+1, strlen(text[i]) - 2);
-				break;
+				front_cmap = drw->colormap->warn;  break;
 			case '.':
-				XftDrawStringUtf8(d, drw->colormap->good, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i]+1, strlen(text[i]) - 2);
-				break;
+				front_cmap = drw->colormap->good;  break;
+			case '-':
+				front_cmap = drw->colormap->unimp; break;
 			default:
-				XftDrawStringUtf8(d, drw->colormap->front, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i], strlen(text[i]) - 1);
+				front_cmap = drw->colormap->front; break;
 		}
+		XftDrawStringUtf8(d, front_cmap, drw->font->xfont, 0, drw->font->xfont->ascent, (const FcChar8 *)text[i]+1, strlen(text[i]) - 2);
 		//apply changes
 		XCopyArea(drw->dpy, drw->drawable, drw->window, drw->gc,0, 0, l, drw->font->h, x, y+i*f_h);
 		i++;
@@ -231,8 +236,15 @@ int update_list(char* f_name){
 	}
 	int fail = 0;
 	size_t L = 1;
-	int N=0;
-	for(int i=0;i<MAX_LEN && fail != -1 && L > 0; i++){
+
+	list[0] = realloc(list[0],1000);
+	list[0][0] = 0;
+	time_t rawtime = time(0);
+	struct tm* T = localtime(&rawtime);
+	strftime(list[0], 1000, "%d.%m.%G, %A  (%H:%M:%S) ", T);
+
+	int N=1;
+	for(int i=1;i<MAX_LEN && fail != -1 && L > 0; i++){
 		fail = getline(&list[i], &L, f);
 		N =i;
 	}
@@ -248,6 +260,8 @@ int main(int argc, char ** argv)
 	if(argc > 2) scr_num = atoi(argv[2]);
 	if(argc > 1) strcpy(filename, argv[1]);
 	else return 1;
+
+	setlocale(LC_ALL, "pl_PL.UTF-8");
 	Drw drw = doXorgShit(scr_num);
 	//loop
 	int count = 0;
